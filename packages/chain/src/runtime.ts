@@ -4,7 +4,7 @@ import { ZKPeer } from "./ZKPeer";
 
 export const modules = {
   Balances,
-  ZKPeer: ZKPeer,
+  ZKPeer,
 };
 
 export const config: ModulesConfig<typeof modules> = {

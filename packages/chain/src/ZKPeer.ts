@@ -14,23 +14,14 @@ export class PublicationPublicOutput extends Struct({
     nullifier: Field,
 }) { }
 
-// canPublish function for the publish circuit
-// private inputs: proof of identity (zkemail or something else) - this is gonna be abstracted for now
 export function canPublish(witness: MerkleMapWitness, nullifier: Nullifier): PublicationPublicOutput {
-    // verify identity proof
-
-
     const key = Poseidon.hash(nullifier.getPublicKey().toFields());
     const [computedRoot, computedKey] = witness.computeRootAndKey(
         Bool(true).toField()
     );
 
-    // has reputation already? maybe here is an if
-    // if this assertion is ok, otherwise we will just update the merkle tree with its key
     computedKey.assertEquals(key);
 
-
-    // returns the publication 
     return new PublicationPublicOutput({
         root: computedRoot,
         nullifier: key,
@@ -52,25 +43,19 @@ export class PublishProof extends Experimental.ZkProgram.Proof(publishCircuit) {
 ///////////////////////////////////////////////////////
 ////////////////// Review Proof //////////////////
 ///////////////////////////////////////////////////////
-// canReview function for the publish circuit
-// private inputs: proof of identity (zkemail or something else) - this is gonna be abstracted for now
 export class ReviewPublicOutput extends Struct({
     root: Field,
     nullifier: Field,
 }) { }
 
 export function canReview(witness: MerkleMapWitness, nullifier: Nullifier): ReviewPublicOutput {
-    // verify identity proof
-
-
     const key = Poseidon.hash(nullifier.getPublicKey().toFields());
     const [computedRoot, computedKey] = witness.computeRootAndKey(
         Bool(true).toField()
     );
+
     computedKey.assertEquals(key);
 
-
-    // returns the review 
     return new ReviewPublicOutput({
         root: computedRoot,
         nullifier: key,
@@ -99,8 +84,6 @@ export class Publication extends Struct({
 
 export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
     @state() public commitment = State.from<Field>(Field);
-    // the nullifier will map the pseudo-user to the key of his publications
-    @state() public nullifiers = StateMap.from<Field, UInt64>(Field, UInt64);
     @state() public reputations = StateMap.from<Field, UInt64>(
         Field,
         UInt64
@@ -108,6 +91,10 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
     @state() public publications = StateMap.from<Field, Publication>(
         Field,
         Publication
+    );
+    @state() public publicationAuthors = StateMap.from<Field, Field>(
+        Field,
+        Field
     );
 
     public constructor(@inject("Balances") private balances: Balances) {
@@ -130,12 +117,16 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
         );
 
         // Generate a unique publication ID
-        const publicationId = Poseidon.hash([publishProof.publicOutput.nullifier, Field(publication.timestamp.toString())]);
+        const publicationId = Poseidon.hash([publishProof.publicOutput.nullifier, Field(publication.timestamp.toString()), Field(publication.content.toString())]);
 
         // Store the publication
         this.publications.set(publicationId, publication);
 
-        // Notify people that there is a new publication
+        // Associate the publication with the author's nullifier
+        this.publicationAuthors.set(publicationId, publishProof.publicOutput.nullifier);
+
+        // Update author's reputation
+        this.updateReputation(publishProof.publicOutput.nullifier);
     }
 
     @runtimeMethod()
@@ -143,39 +134,49 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
         reviewProof.verify();
 
         // Retrieve the publication
-        const publication = this.publications.get(publicationId);
-        assert(publication.isSome, "Publication does not exist");
+        const publicationOption = this.publications.get(publicationId);
+        assert(publicationOption.isSome, "Publication does not exist");
+
+        const publication = publicationOption.value;
 
         // Retrieve the reviewer's nullifier and reputation
         const reviewerNullifier = reviewProof.publicOutput.nullifier;
-        const reviewerReputation = this.reputations.get(reviewerNullifier);
+        const reviewerReputationOption = this.reputations.get(reviewerNullifier);
+        const reviewerReputation = reviewerReputationOption.isSome ? reviewerReputationOption.value : UInt64.zero;
+
         // Assert reviewer reputation is greater than 0
         assert(
-            reviewerReputation.value.greaterThan(UInt64.zero),
+            reviewerReputation.greaterThan(UInt64.zero),
             "Caller cannot review, reputation must be greater than 0"
         );
 
         // Weight the review score with the reviewer's reputation
-        const weightedScore = score.mul(reviewerReputation.value);
+        const weightedScore = score.mul(reviewerReputation.add(UInt64.one));
         // Update the publication score
-        const updatedScore = publication.value.score.add(weightedScore);
+        const updatedScore = publication.score.add(weightedScore);
         this.publications.set(publicationId, new Publication({
-            content: publication.value.content,
-            timestamp: publication.value.timestamp,
+            content: publication.content,
+            timestamp: publication.timestamp,
             score: updatedScore
         }));
 
-        // Get the author's nullifier (assuming it can be derived from the publicationId)
-        const authorNullifier = Poseidon.hash([publicationId]); // Adjust this if necessary
+        // Retrieve the author's nullifier
+        const authorNullifierOption = this.publicationAuthors.get(publicationId);
+        assert(authorNullifierOption.isSome, "Author not found for the publication");
+
+        const authorNullifier = authorNullifierOption.value;
 
         // Update the author's reputation
         this.updateReputation(authorNullifier);
+
+        // Increment the reviewer's reputation
+        this.updateReputation(reviewerNullifier);
     }
 
     private updateReputation(nullifier: Field) {
-        const reputation = this.reputations.get(nullifier);
-        if (reputation.isSome) {
-            this.reputations.set(nullifier, reputation.value.add(UInt64.one));
+        const reputationOption = this.reputations.get(nullifier);
+        if (reputationOption.isSome) {
+            this.reputations.set(nullifier, reputationOption.value.add(UInt64.one));
         } else {
             this.reputations.set(nullifier, UInt64.one);
         }

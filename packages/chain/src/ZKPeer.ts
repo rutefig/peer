@@ -1,10 +1,8 @@
 import { RuntimeModule, runtimeMethod, state } from "@proto-kit/module";
 import { State, StateMap, assert } from "@proto-kit/protocol";
-import { Bool, Experimental, Field, MerkleMapWitness, Nullifier, Poseidon, Struct, UInt64 } from "o1js";
-import { Publications } from "./Publication";
+import { Bool, CircuitString, Experimental, Field, MerkleMapWitness, Nullifier, Poseidon, Struct, UInt64 } from "o1js";
 import { Balances } from "@proto-kit/library";
 import { inject } from 'tsyringe';
-import { Reputation } from "./Reputation";
 
 ///////////////////////////////////////////////////////
 ////////////////// Publication Proof //////////////////
@@ -55,7 +53,7 @@ export class PublishProof extends Experimental.ZkProgram.Proof(publishCircuit) {
 ///////////////////////////////////////////////////////
 // canReview function for the publish circuit
 // private inputs: proof of identity (zkemail or something else) - this is gonna be abstracted for now
-export class ReviewPublicOutput extends Struct({}) {}
+export class ReviewPublicOutput extends Struct({}) { }
 
 export function canReview(): ReviewPublicOutput {
     return new ReviewPublicOutput({});
@@ -71,20 +69,30 @@ export const reviewCircuit = Experimental.ZkProgram({
     },
 });
 
-export class reviewProof extends Experimental.ZkProgram.Proof(reviewCircuit) {}
+export class reviewProof extends Experimental.ZkProgram.Proof(reviewCircuit) { }
 
 type ZKPeerConfig = Record<string, never>;
+
+export class Publication extends Struct({
+    content: CircuitString,
+    timestamp: UInt64,
+    score: UInt64
+}) { }
 
 export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
     @state() public commitment = State.from<Field>(Field);
     // the nullifier will map the pseudo-user to the key of his publications
     @state() public nullifiers = StateMap.from<Field, UInt64>(Field, UInt64);
+    @state() public reputations = StateMap.from<UInt64, UInt64>(
+        UInt64,
+        UInt64
+    );
+    @state() public publications = StateMap.from<UInt64, Publication>(
+        UInt64,
+        Publication
+    );
 
-    public constructor(
-        @inject("Balances") private balances: Balances,
-        @inject("Publications") private publications: Publications,
-        @inject("Reputation") private reputation: Reputation
-    ) {
+    public constructor(@inject("Balances") private balances: Balances) {
         super();
     }
 
@@ -104,7 +112,6 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
         );
 
 
-        this.publications.add()
     }
 
     @runtimeMethod()

@@ -1,28 +1,16 @@
-import { RuntimeModule, runtimeModule } from "@proto-kit/module";
-import { Experimental, Struct } from "o1js";
-
-export class ReviewPublicOutput extends Struct({}) {}
-
-// canReview function for the publish circuit
-// private inputs: proof of identity (zkemail or something else) - this is gonna be abstracted for now
-export function canReview(): ReviewPublicOutput {
-    return new ReviewPublicOutput({});
-}
-
-export const reviewCircuit = Experimental.ZkProgram({
-    publicOutput: ReviewPublicOutput,
-    methods: {
-        canReview: {
-            privateInputs: [],
-            method: canReview,
-        },
-    },
-});
-
-export class reviewProof extends Experimental.ZkProgram.Proof(reviewCircuit) {}
+import { RuntimeModule, runtimeModule, state } from "@proto-kit/module";
+import { StateMap } from "@proto-kit/protocol";
+import { Experimental, Struct, UInt64 } from "o1js";
 
 // TODO: check this
 type ReputationConfig = Record<string, never>;
 
 @runtimeModule()
-export class Reputation extends RuntimeModule<ReputationConfig> {}
+export class Reputation extends RuntimeModule<ReputationConfig> {
+    @state() public reputations = StateMap.from<UInt64, UInt64>(
+        UInt64,
+        UInt64
+    );
+
+    add() {}
+}

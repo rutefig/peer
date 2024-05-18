@@ -53,12 +53,31 @@ export class PublishProof extends Experimental.ZkProgram.Proof(publishCircuit) {
 ///////////////////////////////////////////////////////
 ////////////////// Review Proof //////////////////
 ///////////////////////////////////////////////////////
+// canReview function for the publish circuit
+// private inputs: proof of identity (zkemail or something else) - this is gonna be abstracted for now
+export class ReviewPublicOutput extends Struct({}) {}
+
+export function canReview(): ReviewPublicOutput {
+    return new ReviewPublicOutput({});
+}
+
+export const reviewCircuit = Experimental.ZkProgram({
+    publicOutput: ReviewPublicOutput,
+    methods: {
+        canReview: {
+            privateInputs: [],
+            method: canReview,
+        },
+    },
+});
+
+export class reviewProof extends Experimental.ZkProgram.Proof(reviewCircuit) {}
 
 type ZKPeerConfig = Record<string, never>;
 
 export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
     @state() public commitment = State.from<Field>(Field);
-    // the nullifier will map the pseudo-user to the root of his hash tree of publications
+    // the nullifier will map the pseudo-user to the key of his publications
     @state() public nullifiers = StateMap.from<Field, UInt64>(Field, UInt64);
 
     public constructor(

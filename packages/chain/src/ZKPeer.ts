@@ -36,7 +36,6 @@ export function canPublish(witness: MerkleMapWitness, nullifier: Nullifier): Pub
 }
 
 export const publishCircuit = Experimental.ZkProgram({
-    // publicInput: idProof,
     publicOutput: PublicationPublicOutput,
     methods: {
         canPublish: {
@@ -66,14 +65,11 @@ export function canReview(witness: MerkleMapWitness, nullifier: Nullifier): Revi
     const [computedRoot, computedKey] = witness.computeRootAndKey(
         Bool(true).toField()
     );
-
-    // has reputation already? maybe here is an if
-    // if this assertion is ok, otherwise we will just update the merkle tree with its key
     computedKey.assertEquals(key);
 
 
-    // returns the publication 
-    return new PublicationPublicOutput({
+    // returns the review 
+    return new ReviewPublicOutput({
         root: computedRoot,
         nullifier: key,
     });

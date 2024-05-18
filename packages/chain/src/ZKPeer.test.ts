@@ -34,10 +34,10 @@
 // )
 
 import { TestingAppChain } from "@proto-kit/sdk";
-import { PrivateKey, Field, UInt64 } from "o1js";
+import { PrivateKey, Field, UInt64, Group, Scalar, Bool } from "o1js";
 import { Balances } from "@proto-kit/library";
 import { log } from "@proto-kit/common";
-import { ZKPeer, PublishProof, ReviewProof, Publication } from "../src/zkpeer";
+import { ZKPeer, PublishProof, ReviewProof, Publication } from "../src/ZKPeer";
 import { MerkleMapWitness, Nullifier, Poseidon } from "o1js";
 
 log.setLevel("ERROR");
@@ -49,10 +49,42 @@ describe("zkpeer", () => {
       Balances,
     });
 
+
+    const privateKey = PrivateKey.random();
+    const publicKey = privateKey.toPublicKey();
+    
+    const nullifierValue = {
+        publicKey: publicKey.toGroup(), 
+        public: {
+            nullifier: new Group({
+                x: Field.random(),
+                y: Field.random(),
+            }), 
+            s: Scalar.random(), 
+        },
+        private: {
+            c: Field.random(), 
+            g_r: new Group({
+                x: Field.random(),
+                y: Field.random(),
+            }), 
+            h_m_pk_r: new Group({
+                x: Field.random(),
+                y: Field.random(),
+            }), 
+        }
+    };
+    
     const totalSupply = UInt64.from(10000);
     const initialCommitment = Field(1);
-    const nullifier = new Nullifier(PrivateKey.random());
-    const witness = new MerkleMapWitness([initialCommitment]);
+    const nullifier = new Nullifier(nullifierValue);
+
+    // Initialize isLefts and siblings arrays for MerkleMapWitness
+    const isLefts = [Bool(true), Bool(false)]; // Example values, adjust as needed
+    const siblings = [Field.random(), Field.random()]; // Example values, adjust as needed
+
+    // Create the MerkleMapWitness with both arguments
+    const witness = new MerkleMapWitness(isLefts, siblings);
 
     appChain.configurePartial({
       Runtime: {
@@ -113,10 +145,41 @@ describe("zkpeer", () => {
       Balances,
     });
 
+    const privateKey = PrivateKey.random();
+    const publicKey = privateKey.toPublicKey();
+    
+    const nullifierValue = {
+        publicKey: publicKey.toGroup(), 
+        public: {
+            nullifier: new Group({
+                x: Field.random(),
+                y: Field.random(),
+            }), 
+            s: Scalar.random(), 
+        },
+        private: {
+            c: Field.random(), 
+            g_r: new Group({
+                x: Field.random(),
+                y: Field.random(),
+            }), 
+            h_m_pk_r: new Group({
+                x: Field.random(),
+                y: Field.random(),
+            }), 
+        }
+    };
+
     const totalSupply = UInt64.from(10000);
     const initialCommitment = Field(1);
-    const nullifier = new Nullifier(PrivateKey.random());
-    const witness = new MerkleMapWitness([initialCommitment]);
+    const nullifier = new Nullifier(nullifierValue);
+
+     // Initialize isLefts and siblings arrays for MerkleMapWitness
+    const isLefts = [Bool(true), Bool(false)]; // Example values, adjust as needed
+    const siblings = [Field.random(), Field.random()]; // Example values, adjust as needed
+
+    // Create the MerkleMapWitness with both arguments
+    const witness = new MerkleMapWitness(isLefts, siblings);
 
     appChain.configurePartial({
       Runtime: {

@@ -1,7 +1,8 @@
 import { RuntimeModule, runtimeMethod, runtimeModule, state } from "@proto-kit/module";
 import { State, StateMap } from "@proto-kit/protocol";
 import { Bool, Experimental, Field, MerkleMapWitness, Nullifier, Poseidon, Provable, PublicKey, Struct } from "o1js";
-import { Publication, PublicationId } from "./publications";
+import { Publication, PublicationId, Publications } from "./publications";
+import { inject } from "tsyringe";
 
 type PublishConfig = Record<string, never>;
 
@@ -54,7 +55,11 @@ export class PublishProof extends Experimental.ZkProgram.Proof(publish) { }
 export class Publish extends RuntimeModule<PublishConfig> {
     // commitment to the publications merkle tree
     @state() public commitment = State.from<Field>(Field);
-    @state() public publications = StateMap.from(PublicKey, Provable.Array(Publication, 8));
+    @state() public nullifiers = StateMap.from(PublicKey, Provable.Array(Publication, 8));
+
+    public constructor(@inject("Publications") public publications: Publications) {
+        super();
+    }
 
     @runtimeMethod()
     public setCommitment(commitment: Field) {
@@ -66,7 +71,5 @@ export class Publish extends RuntimeModule<PublishConfig> {
         // check if the publisher is legit to publish - verify the proof
         publishProof.verify();
         const commitment = this.commitment.get();
-
-        // get the commitment
     }
 }

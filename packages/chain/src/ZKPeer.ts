@@ -95,10 +95,6 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
         Field
     );
 
-    public constructor(@inject("Balances") private balances: Balances) {
-        super();
-    }
-
     @runtimeMethod()
     public setCommitment(commitment: Field) {
         this.commitment.set(commitment);

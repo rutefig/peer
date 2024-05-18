@@ -3,6 +3,8 @@ import { State, StateMap, assert } from "@proto-kit/protocol";
 import { Bool, CircuitString, Experimental, Field, MerkleMapWitness, Nullifier, Poseidon, Struct, UInt64 } from "o1js";
 import { Balances } from "@proto-kit/library";
 import { inject } from 'tsyringe';
+//import { calculateScore, calculatePercentile } from "./ReputationCalculator"
+//import { sumOfIndices, ScoreElement } from "./PeerReview";
 
 ///////////////////////////////////////////////////////
 ////////////////// Publication Proof //////////////////

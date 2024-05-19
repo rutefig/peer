@@ -1,5 +1,7 @@
 # ZKPeer
 
+![Logo](./images/logo.png)
+
 This repository implements a ZK-Based anonymous scientific journal publishing and reviewing De-Sci platform to combat the challenges faced by the scientific research community due to political interference, inconsistent funding, and the prioritization of short-term results over long-term, fundamental research. 
 
 ZKPeer allows researchers to anonymously publish and review research papers while also taking measures to ensure that the publishers and the reviewers are qualified to to play their roles and the publications are legitimate. We achieve this my implementing a reputation-based AppChain on Mina Protocol built using protokit. 

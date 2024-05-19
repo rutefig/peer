@@ -5,6 +5,7 @@ import { Field, PrivateKey, Nullifier, MerkleMap, Poseidon, Bool, UInt64, Circui
 import { Balances } from "@proto-kit/library";
 import { Pickles } from "o1js/dist/node/snarky";
 import { dummyBase64Proof } from "o1js/dist/node/lib/proof_system";
+import { StateServiceProvider } from "@proto-kit/protocol";
 
 describe("ZKPeer", () => {
     let appChain: ReturnType<

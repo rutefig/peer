@@ -13,8 +13,9 @@ import { inject, injectable } from 'tsyringe';
 export class PublicationPublicOutput extends Struct({
     root: Field,
     nullifier: Field,
-}) { }
+}) {}
 
+// Publication Verification
 export function canPublish(witness: MerkleMapWitness, nullifier: Nullifier): PublicationPublicOutput {
     const key = Poseidon.hash(nullifier.getPublicKey().toFields());
     const [computedRoot, computedKey] = witness.computeRootAndKey(
@@ -29,6 +30,7 @@ export function canPublish(witness: MerkleMapWitness, nullifier: Nullifier): Pub
     });
 }
 
+// Publish Circuit
 export const publishCircuit = Experimental.ZkProgram({
     publicOutput: PublicationPublicOutput,
     methods: {
@@ -39,7 +41,7 @@ export const publishCircuit = Experimental.ZkProgram({
     },
 });
 
-export class PublishProof extends Experimental.ZkProgram.Proof(publishCircuit) { }
+export class PublishProof extends Experimental.ZkProgram.Proof(publishCircuit) {}
 
 ///////////////////////////////////////////////////////
 ////////////////// Review Proof //////////////////
@@ -47,8 +49,9 @@ export class PublishProof extends Experimental.ZkProgram.Proof(publishCircuit) {
 export class ReviewPublicOutput extends Struct({
     root: Field,
     nullifier: Field,
-}) { }
+}) {}
 
+// Review Verification
 export function canReview(witness: MerkleMapWitness, nullifier: Nullifier): ReviewPublicOutput {
     const key = Poseidon.hash(nullifier.getPublicKey().toFields());
     const [computedRoot, computedKey] = witness.computeRootAndKey(
@@ -63,6 +66,7 @@ export function canReview(witness: MerkleMapWitness, nullifier: Nullifier): Revi
     });
 }
 
+// Review Circuit
 export const reviewCircuit = Experimental.ZkProgram({
     publicOutput: ReviewPublicOutput,
     methods: {
@@ -73,7 +77,7 @@ export const reviewCircuit = Experimental.ZkProgram({
     },
 });
 
-export class ReviewProof extends Experimental.ZkProgram.Proof(reviewCircuit) { }
+export class ReviewProof extends Experimental.ZkProgram.Proof(reviewCircuit) {}
 
 type ZKPeerConfig = Record<string, never>;
 
@@ -98,6 +102,10 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
         Field,
         Field
     );
+    @state() public userReviews = StateMap.from<Field, Bool>( // New state for tracking reviews
+        Field,
+        Bool
+    );
 
     @runtimeMethod()
     public setCommitment(commitment: Field) {
@@ -114,19 +122,13 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
             "Publish proof does not contain the correct commitment"
         );
 
-        // Generate a unique publication ID
         const publicationId = Poseidon.hash(
             [publishProof.publicOutput.nullifier, 
             ...publication.timestamp.toFields()],
         );
 
-        // Store the publication
         this.publications.set(publicationId, publication);
-
-        // Associate the publication with the author's nullifier
         this.publicationAuthors.set(publicationId, publishProof.publicOutput.nullifier);
-
-        // Update author's reputation
         this.updateReputation(publishProof.publicOutput.nullifier);
     }
 
@@ -134,26 +136,29 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
     public review(reviewProof: ReviewProof, publicationId: Field, score: UInt64) {
         reviewProof.verify();
 
-        // Retrieve the publication
         const publicationOption = this.publications.get(publicationId);
         assert(publicationOption.isSome, "Publication does not exist");
 
         const publication = publicationOption.value;
 
-        // Retrieve the reviewer's nullifier and reputation
         const reviewerNullifier = reviewProof.publicOutput.nullifier;
+
+        // Create a unique key for this review
+        const reviewKey = Poseidon.hash([reviewerNullifier, publicationId]);
+
+        // Check if the user has already reviewed this publication
+        const hasReviewed = this.userReviews.get(reviewKey);
+        assert(hasReviewed.isSome.not(), "User has already reviewed this publication");
+
         const reviewerReputationOption = this.reputations.get(reviewerNullifier);
         const reviewerReputation = reviewerReputationOption.isSome ? reviewerReputationOption.value : UInt64.zero;
 
-        // Assert reviewer reputation is greater than 0
         assert(
             reviewerReputation.greaterThan(UInt64.zero),
             "Caller cannot review, reputation must be greater than 0"
         );
 
-        // Weight the review score with the reviewer's reputation
         const weightedScore = score.mul(reviewerReputation.add(UInt64.one));
-        // Update the publication score
         const updatedScore = publication.score.add(weightedScore);
         this.publications.set(publicationId, new Publication({
             content: publication.content,
@@ -161,16 +166,15 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
             score: updatedScore
         }));
 
-        // Retrieve the author's nullifier
         const authorNullifierOption = this.publicationAuthors.get(publicationId);
         assert(authorNullifierOption.isSome, "Author not found for the publication");
 
         const authorNullifier = authorNullifierOption.value;
 
-        // Update the author's reputation
-        this.updateReputation(authorNullifier);
+        // Mark this publication as reviewed by the user
+        this.userReviews.set(reviewKey, Bool(true));
 
-        // Increment the reviewer's reputation
+        this.updateReputation(authorNullifier);
         this.updateReputation(reviewerNullifier);
     }
 

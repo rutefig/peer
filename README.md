@@ -4,12 +4,19 @@ This repository implements a ZK-Based anonymous scientific journal publishing an
 
 ZKPeer allows researchers to anonymously publish and review research papers while also taking measures to ensure that the publishers and the reviewers are qualified to to play their roles and the publications are legitimate. We achieve this my implementing a reputation-based AppChain on Mina Protocol built using protokit. 
 
-## Description
+## How it works
 
-- The code consists of two main actors - a researcher and a reviewer (the same person can be both).
-- At first, a ZK-circuit accepts a researcher's authorized credentials (such as a university email) as ID proof. 
+- The code consists of two main actors - a **researcher** and a **reviewer** (the same person can be both).
+- At first, a ZK-circuit accepts a researcher's authorized credentials (such as a university email) privately which it validates and generates an **ID proof**. 
+- When the researcher submits a paper, it is parsed and along with the ID proof as input, another circuit validates and generates a **publish proof** and a **publication ID**. 
+- When the published paper has a high enough score (in this case, positive reviews from qualified reviewers), it is published on-chain. 
 
 ![The Circuits](./images/functions.jpeg)
+
+- A reviewer also has a generated **ID proof**
+- They review the paper and vote yes or no for its publication on-chain. This vote, along with the publication ID and the ID proof is validated in a ZK circuit to generate a **review proof**
+- The number of positive and negative reviews keep updating the publication's score. If the score meets a certain threshold within a time limit, it is published or else it is discarded. 
+- The final step **updates the reputations** of the researchers that is based on their **publication scores**, **number of valid reviews** and **number of times their publications are cited** by other researchers.
 
 ## Quick start
 

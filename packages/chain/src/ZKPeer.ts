@@ -1,8 +1,9 @@
+import "reflect-metadata"; //error handling
 import { RuntimeModule, runtimeMethod, state } from "@proto-kit/module";
 import { State, StateMap, assert } from "@proto-kit/protocol";
 import { Bool, CircuitString, Experimental, Field, MerkleMapWitness, Nullifier, Poseidon, Struct, UInt64 } from "o1js";
 import { Balances } from "@proto-kit/library";
-import { inject } from 'tsyringe';
+import { inject, injectable } from 'tsyringe';
 //import { calculateScore, calculatePercentile } from "./ReputationCalculator"
 //import { sumOfIndices, ScoreElement } from "./PeerReview";
 
@@ -82,6 +83,7 @@ export class Publication extends Struct({
     score: UInt64
 }) { }
 
+@injectable()
 export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
     @state() public commitment = State.from<Field>(Field);
     @state() public reputations = StateMap.from<Field, UInt64>(

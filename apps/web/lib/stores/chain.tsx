@@ -123,3 +123,10 @@ export const usePollBlockHeight = () => {
     return () => clearInterval(intervalId);
   }, []);
 };
+
+// Define and export a client object that uses the chain store
+export const client = {
+  start: async () => {
+    const chainStore = useChainStore.getState();
+    await chainStore.loadBlock();
+  },};

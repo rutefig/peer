@@ -1,10 +1,13 @@
 # ZKPeer
 
-This repository implements a ZK-Based anonymous scientific journal publishing and reviewing De-Sci platform to combat the challenges faced by the scientific research community due to political interference, inconsistent funding, and the prioritization of short-term results over long-term, fundamental research.
+This repository implements a ZK-Based anonymous scientific journal publishing and reviewing De-Sci platform to combat the challenges faced by the scientific research community due to political interference, inconsistent funding, and the prioritization of short-term results over long-term, fundamental research. 
+
+ZKPeer allows researchers to anonymously publish and review research papers while also taking measures to ensure that the publishers and the reviewers are qualified to to play their roles and the publications are legitimate. We achieve this my implementing a reputation-based AppChain on Mina Protocol built using protokit. 
 
 ## Description
 
-- The code consists of two main actors - a researcher and a reviewer
+- The code consists of two main actors - a researcher and a reviewer (the same person can be both).
+- At first, a ZK-circuit accepts a researcher's authorized credentials (such as a university email) as ID proof. 
 
 ![The Circuits](./images/functions.jpeg)
 

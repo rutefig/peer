@@ -102,7 +102,7 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
         Field,
         Field
     );
-    @state() public userReviews = StateMap.from<Field, Bool>( // New state for tracking reviews
+    @state() public userReviews = StateMap.from<Field, Bool>(
         Field,
         Bool
     );

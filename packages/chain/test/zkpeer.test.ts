@@ -96,7 +96,8 @@ describe("ZKPeer", () => {
 
         await appChain.produceBlock();
 
-        const publicationId = Poseidon.hash([publishProof.publicOutput.nullifier, Field(publication.timestamp.toString()), Field(publication.content.toString())]);
+        // Use toFields() for safe handling of field elements
+        const publicationId = Poseidon.hash([publishProof.publicOutput.nullifier, ...publication.timestamp.toFields(), ...publication.content.toFields()]);
         const storedPublication = await appChain.query.runtime.ZKPeer.publications.get(publicationId);
 
         expect(storedPublication).toBeTruthy();
@@ -121,7 +122,8 @@ describe("ZKPeer", () => {
 
         await appChain.produceBlock();
 
-        const publicationId = Poseidon.hash([publishProof.publicOutput.nullifier, Field(publication.timestamp.toString()), Field(publication.content.toString())]);
+        // Use toFields() for safe handling of field elements
+        const publicationId = Poseidon.hash([publishProof.publicOutput.nullifier, ...publication.timestamp.toFields(), ...publication.content.toFields()]);
 
         const reviewerNullifier = Nullifier.fromJSON(Nullifier.createTestNullifier([], bobKey));
         const reviewProof = await mockReviewProof(canReview(bobWitness, reviewerNullifier));

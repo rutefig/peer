@@ -115,7 +115,10 @@ export class ZKPeer extends RuntimeModule<ZKPeerConfig> {
         );
 
         // Generate a unique publication ID
-        const publicationId = Poseidon.hash([publishProof.publicOutput.nullifier, Field(publication.timestamp.toString()), Field(publication.content.toString())]);
+        const publicationId = Poseidon.hash(
+            [publishProof.publicOutput.nullifier, 
+            ...publication.timestamp.toFields()],
+        );
 
         // Store the publication
         this.publications.set(publicationId, publication);

@@ -1,250 +1,155 @@
-// import { TestingAppChain } from "@proto-kit/sdk";
-// import { PrivateKey } from "o1js";
-// import { ZKPeer } from "../src/ZKPeer"
-// import { Balances } from "../src/balances";
-// import { log } from "@proto-kit/common";
-// import { BalancesKey, TokenId, UInt64 } from "@proto-kit/library";
-
-// log.setLevel("ERROR");
-
-// describe("ZKPeer", () => {
-//     it("demonstrates how peer works", async () =>{
-//         const appChain = TestingAppChain.fromRuntime({
-//             ZKPeer
-//           });
-        
-//           appChain.configurePartial({
-//             Runtime: {
-//                 Balances: {},
-//                 ZKPeer: {},
-//             },
-//           });
-
-//           await appChain.start();
-
-//           const zkpeer = appChain.runtime.resolve("ZKPeer");
-
-//           const tx1 = await appChain.transaction(alice, () => {
-//             zkpeer.review(reviewProof, publicationId, score);
-//           });
-
-//     },1_000_000);
-// }
-
-// )
-
+import "reflect-metadata";
 import { TestingAppChain } from "@proto-kit/sdk";
-import { PrivateKey, Field, UInt64, Group, Scalar, Bool } from "o1js";
+import { ZKPeer, PublishProof, ReviewProof, Publication, PublicationPublicOutput, ReviewPublicOutput, canPublish, canReview } from "../src/ZKPeer";
+import { Field, PrivateKey, Nullifier, MerkleMap, Poseidon, Bool, UInt64, CircuitString } from "o1js";
 import { Balances } from "@proto-kit/library";
-import { log } from "@proto-kit/common";
-import { ZKPeer, PublishProof, ReviewProof, Publication } from "../src/ZKPeer";
-import { MerkleMapWitness, Nullifier, Poseidon } from "o1js";
+import { Pickles } from "o1js/dist/node/snarky";
+import { dummyBase64Proof } from "o1js/dist/node/lib/proof_system";
 
-log.setLevel("ERROR");
+describe("ZKPeer", () => {
+    let appChain: ReturnType<
+        typeof TestingAppChain.fromRuntime<{ ZKPeer: typeof ZKPeer }>
+    >;
+    let zkPeer: ZKPeer;
 
-describe("zkpeer", () => {
-  it("should correctly handle publishing a publication", async () => {
-    const appChain = TestingAppChain.fromRuntime({
-      ZKPeer,
-      Balances,
+    const aliceKey = PrivateKey.random();
+    const alice = aliceKey.toPublicKey();
+    const bobKey = PrivateKey.random();
+    const bob = bobKey.toPublicKey();
+
+    const map = new MerkleMap();
+    const aliceKeyHash = Poseidon.hash(alice.toFields());
+    const bobKeyHash = Poseidon.hash(bob.toFields());
+    map.set(aliceKeyHash, Bool(true).toField());
+    map.set(bobKeyHash, Bool(true).toField());
+
+    const aliceWitness = map.getWitness(aliceKeyHash);
+    const bobWitness = map.getWitness(bobKeyHash);
+
+    async function mockPublishProof(publicOutput: PublicationPublicOutput): Promise<PublishProof> {
+        const [, proof] = Pickles.proofOfBase64(await dummyBase64Proof(), 2);
+        return new PublishProof({
+            proof: proof,
+            maxProofsVerified: 2,
+            publicInput: undefined,
+            publicOutput,
+        });
+    }
+
+    async function mockReviewProof(publicOutput: ReviewPublicOutput): Promise<ReviewProof> {
+        const [, proof] = Pickles.proofOfBase64(await dummyBase64Proof(), 2);
+        return new ReviewProof({
+            proof: proof,
+            maxProofsVerified: 2,
+            publicInput: undefined,
+            publicOutput,
+        });
+    }
+
+    beforeAll(async () => {
+        appChain = TestingAppChain.fromRuntime({
+            ZKPeer,
+        });
+        await appChain.configurePartial({
+            Runtime: {
+                ZKPeer: {},
+                Balances: {},
+            },
+        });
+        await appChain.start();
+
+        appChain.setSigner(aliceKey);
+
+        zkPeer = appChain.runtime.resolve("ZKPeer");
     });
 
+    it("should set the commitment", async () => {
+        const tx = await appChain.transaction(alice, () => {
+            zkPeer.setCommitment(map.getRoot());
+        });
 
-    const privateKey = PrivateKey.random();
-    const publicKey = privateKey.toPublicKey();
-    
-    const nullifierValue = {
-        publicKey: publicKey.toGroup(), 
-        public: {
-            nullifier: new Group({
-                x: Field.random(),
-                y: Field.random(),
-            }), 
-            s: Scalar.random(), 
-        },
-        private: {
-            c: Field.random(), 
-            g_r: new Group({
-                x: Field.random(),
-                y: Field.random(),
-            }), 
-            h_m_pk_r: new Group({
-                x: Field.random(),
-                y: Field.random(),
-            }), 
-        }
-    };
-    
-    const totalSupply = UInt64.from(10000);
-    const initialCommitment = Field(1);
-    const nullifier = new Nullifier(nullifierValue);
+        await tx.sign();
+        await tx.send();
 
-    // Initialize isLefts and siblings arrays for MerkleMapWitness
-    const isLefts = [Bool(true), Bool(false)]; // Example values, adjust as needed
-    const siblings = [Field.random(), Field.random()]; // Example values, adjust as needed
+        await appChain.produceBlock();
 
-    // Create the MerkleMapWitness with both arguments
-    const witness = new MerkleMapWitness(isLefts, siblings);
+        const commitment = await appChain.query.runtime.ZKPeer.commitment.get();
 
-    appChain.configurePartial({
-      Runtime: {
-        Balances: {
-          totalSupply,
-        },
-        ZKPeer: {
-          commitment: initialCommitment,
-        },
-      },
+        expect(commitment?.toBigInt()).toBe(map.getRoot().toBigInt());
     });
 
-    await appChain.start();
+    it("should publish a paper", async () => {
+        const nullifier = Nullifier.fromJSON(Nullifier.createTestNullifier([], aliceKey));
+        const publishProof = await mockPublishProof(canPublish(aliceWitness, nullifier));
+        const publication = new Publication({
+            content: CircuitString.fromString('Test Content'),
+            timestamp: UInt64.from(Date.now()),
+            score: UInt64.zero,
+        });
 
-    const alicePrivateKey = PrivateKey.random();
-    const alice = alicePrivateKey.toPublicKey();
-    appChain.setSigner(alicePrivateKey);
+        const tx = await appChain.transaction(alice, () => {
+            zkPeer.publish(publishProof, publication);
+        });
 
-    const zkPeer = appChain.runtime.resolve("ZKPeer");
+        await tx.sign();
+        await tx.send();
 
-    const publication = new Publication({
-      content: "Test Content",
-      timestamp: UInt64.from(Date.now()),
-      score: UInt64.zero,
+        await appChain.produceBlock();
+
+        const publicationId = Poseidon.hash([publishProof.publicOutput.nullifier, Field(publication.timestamp.toString()), Field(publication.content.toString())]);
+        const storedPublication = await appChain.query.runtime.ZKPeer.publications.get(publicationId);
+
+        expect(storedPublication).toBeTruthy();
+        expect(storedPublication).toEqual(publication);
     });
 
-    const publishProof = PublishProof.generate({
-      witness,
-      nullifier,
+    it("should review a paper and update scores", async () => {
+        const nullifier = Nullifier.fromJSON(Nullifier.createTestNullifier([], aliceKey));
+        const publishProof = await mockPublishProof(canPublish(aliceWitness, nullifier));
+        const publication = new Publication({
+            content: CircuitString.fromString('Test Content'),
+            timestamp: UInt64.from(Date.now()),
+            score: UInt64.zero,
+        });
+
+        const publishTx = await appChain.transaction(alice, () => {
+            zkPeer.publish(publishProof, publication);
+        });
+
+        await publishTx.sign();
+        await publishTx.send();
+
+        await appChain.produceBlock();
+
+        const publicationId = Poseidon.hash([publishProof.publicOutput.nullifier, Field(publication.timestamp.toString()), Field(publication.content.toString())]);
+
+        const reviewerNullifier = Nullifier.fromJSON(Nullifier.createTestNullifier([], bobKey));
+        const reviewProof = await mockReviewProof(canReview(bobWitness, reviewerNullifier));
+
+        // Setting initial reputation for the reviewer
+        await zkPeer.reputations.set(reviewProof.publicOutput.nullifier, UInt64.from(5));
+
+        const reviewTx = await appChain.transaction(bob, () => {
+            zkPeer.review(reviewProof, publicationId, UInt64.from(10));
+        });
+
+        await reviewTx.sign();
+        await reviewTx.send();
+
+        await appChain.produceBlock();
+
+        const updatedPublication = (await appChain.query.runtime.ZKPeer.publications.get(publicationId));
+        const expectedScore = publication.score.add(UInt64.from(60)); // 10 * 6 (5 + 1 initial reputation increment)
+
+        expect(updatedPublication).toBeTruthy();
+        expect(updatedPublication?.score).toEqual(expectedScore);
+
+        // Validate updated author reputation
+        const authorReputation = (await appChain.query.runtime.ZKPeer.reputations.get(publishProof.publicOutput.nullifier));
+        expect(authorReputation).toEqual(UInt64.from(1)); // Initial reputation incremented
+
+        // Validate updated reviewer reputation
+        const reviewerReputation = (await appChain.query.runtime.ZKPeer.reputations.get(reviewProof.publicOutput.nullifier));
+        expect(reviewerReputation).toEqual(UInt64.from(6)); // Initial reputation 5 + 1
     });
-
-    const tx = await appChain.transaction(alice, () => {
-      zkPeer.publish(publishProof, publication);
-    });
-
-    await tx.sign();
-    await tx.send();
-
-    const block = await appChain.produceBlock();
-
-    const publicationId = Poseidon.hash([
-      publishProof.publicOutput.nullifier,
-      Field(publication.timestamp.toString()),
-      Field(publication.content.toString()),
-    ]);
-
-    const storedPublication = await appChain.query.runtime.ZKPeer.publications.get(
-      publicationId
-    );
-
-    expect(block?.transactions[0].status.toBoolean()).toBe(true);
-    expect(storedPublication?.content.toString()).toBe("Test Content");
-  }, 1_000_000);
-
-  it("should correctly handle reviewing a publication", async () => {
-    const appChain = TestingAppChain.fromRuntime({
-      ZKPeer,
-      Balances,
-    });
-
-    const privateKey = PrivateKey.random();
-    const publicKey = privateKey.toPublicKey();
-    
-    const nullifierValue = {
-        publicKey: publicKey.toGroup(), 
-        public: {
-            nullifier: new Group({
-                x: Field.random(),
-                y: Field.random(),
-            }), 
-            s: Scalar.random(), 
-        },
-        private: {
-            c: Field.random(), 
-            g_r: new Group({
-                x: Field.random(),
-                y: Field.random(),
-            }), 
-            h_m_pk_r: new Group({
-                x: Field.random(),
-                y: Field.random(),
-            }), 
-        }
-    };
-
-    const totalSupply = UInt64.from(10000);
-    const initialCommitment = Field(1);
-    const nullifier = new Nullifier(nullifierValue);
-
-     // Initialize isLefts and siblings arrays for MerkleMapWitness
-    const isLefts = [Bool(true), Bool(false)]; // Example values, adjust as needed
-    const siblings = [Field.random(), Field.random()]; // Example values, adjust as needed
-
-    // Create the MerkleMapWitness with both arguments
-    const witness = new MerkleMapWitness(isLefts, siblings);
-
-    appChain.configurePartial({
-      Runtime: {
-        Balances: {
-          totalSupply,
-        },
-        ZKPeer: {
-          commitment: initialCommitment,
-        },
-      },
-    });
-
-    await appChain.start();
-
-    const alicePrivateKey = PrivateKey.random();
-    const alice = alicePrivateKey.toPublicKey();
-    appChain.setSigner(alicePrivateKey);
-
-    const zkPeer = appChain.runtime.resolve("ZKPeer");
-
-    const publication = new Publication({
-      content: "Test Content",
-      timestamp: UInt64.from(Date.now()),
-      score: UInt64.zero,
-    });
-
-    const publishProof = PublishProof.generate({
-      witness,
-      nullifier,
-    });
-
-    let tx = await appChain.transaction(alice, () => {
-      zkPeer.publish(publishProof, publication);
-    });
-
-    await tx.sign();
-    await tx.send();
-
-    await appChain.produceBlock();
-
-    const publicationId = Poseidon.hash([
-      publishProof.publicOutput.nullifier,
-      Field(publication.timestamp.toString()),
-      Field(publication.content.toString()),
-    ]);
-
-    const reviewProof = ReviewProof.generate({
-      witness,
-      nullifier,
-    });
-
-    tx = await appChain.transaction(alice, () => {
-      zkPeer.review(reviewProof, publicationId, UInt64.from(5));
-    });
-
-    await tx.sign();
-    await tx.send();
-
-    const block = await appChain.produceBlock();
-
-    const updatedPublication = await appChain.query.runtime.ZKPeer.publications.get(
-      publicationId
-    );
-
-    expect(block?.transactions[0].status.toBoolean()).toBe(true);
-    expect(updatedPublication?.score.toBigInt()).toBeGreaterThan(0n);
-  }, 1_000_000);
 });
